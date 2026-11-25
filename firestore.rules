@@ -1,0 +1,168 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVE HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidOptionalString(data, field, maxLen) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+    function isValidUserProfile(data) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+             isValidOptionalString(data, 'email', 200) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidCustomer(data) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.meterNumber is string && data.meterNumber.size() >= 1 && data.meterNumber.size() <= 60 &&
+             data.tariffPlan is string && data.tariffPlan.size() >= 1 && data.tariffPlan.size() <= 32 &&
+             data.tariffPlan in ['INDUSTRIAL_HT', 'COMMERCIAL_LT', 'SOLAR_NET', 'STANDARD'] &&
+             data.sanctionedLoadKw is number && data.sanctionedLoadKw >= 0 && data.sanctionedLoadKw <= 1000000 &&
+             isValidOptionalString(data, 'accountCode', 40) &&
+             isValidOptionalString(data, 'location', 160) &&
+             isValidOptionalString(data, 'contactPhone', 30) &&
+             isValidOptionalString(data, 'notes', 300) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidMeterReading(data) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             isValidId(data.customerId) &&
+             data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120 &&
+             data.meterNumber is string && data.meterNumber.size() >= 1 && data.meterNumber.size() <= 60 &&
+             data.readingDate is string && data.readingDate.size() == 10 && data.readingDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+             data.readingTime is string && data.readingTime.size() == 5 && data.readingTime.matches('^[0-9]{2}:[0-9]{2}$') &&
+             data.readingEpochMillis is int && data.readingEpochMillis >= 0 &&
+             data.kwh is number && data.kwh >= 0 && data.kwh <= 1000000000 &&
+             data.kvarh is number && data.kvarh >= 0 && data.kvarh <= 1000000000 &&
+             data.kvah is number && data.kvah >= 0 && data.kvah <= 1000000000 &&
+             data.powerFactor is number && data.powerFactor >= 0 && data.powerFactor <= 1 &&
+             isValidOptionalString(data, 'notes', 300) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- USER PROFILE COLLECTION ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // --- CUSTOMERS SUBCOLLECTION ---
+      match /customers/{customerId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(customerId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(customerId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'name', 'meterNumber', 'tariffPlan',
+                           'sanctionedLoadKw', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'name', 'meterNumber', 'tariffPlan',
+                           'sanctionedLoadKw', 'accountCode', 'location',
+                           'contactPhone', 'notes', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCustomer(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(customerId) &&
+                         isValidCustomer(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'meterNumber', 'tariffPlan', 'sanctionedLoadKw',
+                           'accountCode', 'location', 'contactPhone', 'notes', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(customerId);
+      }
+
+      // --- METER READINGS SUBCOLLECTION ---
+      match /readings/{readingId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(readingId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(readingId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'customerId', 'customerName', 'meterNumber',
+                           'readingDate', 'readingTime', 'readingEpochMillis',
+                           'kwh', 'kvarh', 'kvah', 'powerFactor',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'customerId', 'customerName', 'meterNumber',
+                           'readingDate', 'readingTime', 'readingEpochMillis',
+                           'kwh', 'kvarh', 'kvah', 'powerFactor',
+                           'notes', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidMeterReading(incoming()) &&
+                         exists(/databases/$(database)/documents/users/$(userId)/customers/$(incoming().customerId));
+
+        allow update: if isOwner(userId) &&
+                         isValidId(readingId) &&
+                         isValidMeterReading(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().customerId == existing().customerId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'customerName', 'meterNumber', 'readingDate', 'readingTime',
+                           'readingEpochMillis', 'kwh', 'kvarh', 'kvah',
+                           'powerFactor', 'notes', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(readingId);
+      }
+    }
+  }
+}

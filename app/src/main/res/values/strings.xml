@@ -1,0 +1,64 @@
+<resources>
+    <string name="app_name">VoltLedger</string>
+    <string name="app_tagline">Precision Daily Meter Readings &amp; Grid Analytics</string>
+
+    <!-- Navigation -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_customers">Customers</string>
+    <string name="nav_readings">Readings</string>
+    <string name="nav_reports">Reports</string>
+
+    <!-- Auth -->
+    <string name="auth_hero_title">Industrial Meter Intelligence</string>
+    <string name="auth_hero_subtitle">Record daily kWh, kVArh, kVAh, and Power Factor per customer — offline in the field with automatic cloud backup.</string>
+    <string name="auth_sign_in_google">Sign in with Google</string>
+    <string name="auth_sign_out">Sign Out</string>
+    <string name="auth_feature_offline">Works seamlessly offline with automatic cloud sync</string>
+    <string name="auth_feature_charts">Live consumption trends and power factor diagnostics</string>
+    <string name="auth_feature_export">One-tap PDF and Excel (.xlsx) management reports</string>
+
+    <!-- Sync Status -->
+    <string name="sync_status_synced">Cloud Synced</string>
+    <string name="sync_status_offline">Offline Mode</string>
+    <string name="sync_status_pending">%1$d Pending Sync</string>
+    <string name="sync_now">Sync Now</string>
+
+    <!-- Actions -->
+    <string name="action_log_reading">Log Reading</string>
+    <string name="action_add_customer">Add Customer</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_export_pdf">Export PDF</string>
+    <string name="action_export_excel">Export Excel (.xlsx)</string>
+    <string name="action_save_to_device">Save to Device</string>
+    <string name="action_share">Share</string>
+    <string name="action_auto_calc_pf">Auto-Calc PF</string>
+
+    <!-- Field Labels -->
+    <string name="label_customer">Customer</string>
+    <string name="label_customer_name">Customer / Facility Name</string>
+    <string name="label_meter_number">Meter Serial Number</string>
+    <string name="label_account_code">Account Code (Optional)</string>
+    <string name="label_location">Site Location (Optional)</string>
+    <string name="label_tariff_plan">Tariff Classification</string>
+    <string name="label_sanctioned_load">Sanctioned Load (kW)</string>
+    <string name="label_contact_phone">Contact Phone (Optional)</string>
+    <string name="label_notes">Field Notes (Optional)</string>
+    <string name="label_date">Reading Date</string>
+    <string name="label_time">Reading Time</string>
+    <string name="label_kwh">Active Energy (kWh)</string>
+    <string name="label_kvarh">Reactive Energy (kVArh)</string>
+    <string name="label_kvah">Apparent Energy (kVAh)</string>
+    <string name="label_power_factor">Power Factor (0.00 – 1.00)</string>
+
+    <!-- Empty states -->
+    <string name="empty_customers_title">No Customers Registered</string>
+    <string name="empty_customers_body">Add your first utility customer and meter serial to start logging daily energy readings.</string>
+    <string name="empty_readings_title">No Meter Readings Yet</string>
+    <string name="empty_readings_body">Tap Log Reading to record daily kWh, kVArh, kVAh, and power factor entries — even offline.</string>
+    <string name="empty_charts_title">Charts Ready for Telemetry</string>
+    <string name="empty_charts_body">Log at least two readings to visualize active vs. apparent energy trends and power factor health.</string>
+</resources>

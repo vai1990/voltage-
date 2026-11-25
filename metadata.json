@@ -1,0 +1,6 @@
+{
+  "name": "VoltLedger",
+  "description": "Daily utility meter reading tracker with per-customer entries, offline-first cloud synchronization, consumption trend charts, and PDF/Excel report exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

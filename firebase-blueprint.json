@@ -1,0 +1,184 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated utility manager or field engineer profile.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the signed-in user."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name shown in the dashboard header and reports."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Optional email address from Google Sign-In."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() upon creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on each update."
+        }
+      },
+      "required": ["userId", "displayName", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A utility customer account and associated electrical meter.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Customer or facility name."
+        },
+        "meterNumber": {
+          "type": "string",
+          "description": "Unique meter serial or identifier."
+        },
+        "tariffPlan": {
+          "type": "string",
+          "enum": ["INDUSTRIAL_HT", "COMMERCIAL_LT", "SOLAR_NET", "STANDARD"],
+          "description": "Utility billing tariff classification."
+        },
+        "sanctionedLoadKw": {
+          "type": "number",
+          "description": "Sanctioned contract demand in kW."
+        },
+        "accountCode": {
+          "type": "string",
+          "description": "Optional billing account or consumer number."
+        },
+        "location": {
+          "type": "string",
+          "description": "Optional plant, substation, or service address."
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Optional site contact phone number."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional technician notes."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "name", "meterNumber", "tariffPlan", "sanctionedLoadKw", "createdAt", "updatedAt"]
+    },
+    "MeterReading": {
+      "title": "MeterReading",
+      "description": "Daily electrical meter reading recorded for a specific customer.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "customerId": {
+          "type": "string",
+          "description": "Document ID of the associated Customer under the same user."
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Denormalized customer name for display and report export."
+        },
+        "meterNumber": {
+          "type": "string",
+          "description": "Denormalized meter serial number."
+        },
+        "readingDate": {
+          "type": "string",
+          "description": "Reading date in YYYY-MM-DD format."
+        },
+        "readingTime": {
+          "type": "string",
+          "description": "Reading time in HH:mm 24-hour format."
+        },
+        "readingEpochMillis": {
+          "type": "integer",
+          "description": "Epoch milliseconds of the reading date and time for sorting and trend charts."
+        },
+        "kwh": {
+          "type": "number",
+          "description": "Active energy reading in kWh."
+        },
+        "kvarh": {
+          "type": "number",
+          "description": "Reactive energy reading in kVArh."
+        },
+        "kvah": {
+          "type": "number",
+          "description": "Apparent energy reading in kVAh."
+        },
+        "powerFactor": {
+          "type": "number",
+          "description": "Power factor between 0.0 and 1.0."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional field observation or inspection notes."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "userId",
+        "customerId",
+        "customerName",
+        "meterNumber",
+        "readingDate",
+        "readingTime",
+        "readingEpochMillis",
+        "kwh",
+        "kvarh",
+        "kvah",
+        "powerFactor",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profile document."
+    },
+    "/users/{userId}/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "User-scoped utility customer accounts and meter metadata."
+    },
+    "/users/{userId}/readings/{readingId}": {
+      "schema": { "$ref": "#/entities/MeterReading" },
+      "description": "User-scoped daily meter readings linked to customers."
+    }
+  }
+}
