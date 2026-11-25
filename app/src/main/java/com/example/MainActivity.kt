@@ -31,20 +31,26 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ElectricMeter
 import androidx.compose.material.icons.rounded.Logout
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +63,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -104,6 +111,9 @@ import com.example.ui.theme.BrightEmerald
 import com.example.ui.theme.ElectricCyan
 import com.example.ui.theme.MonoMetricSmall
 import com.example.ui.theme.VoltLedgerTheme
+import com.example.update.AppUpdateChecker
+import com.example.update.AppUpdateInfo
+import com.example.update.UpdateCheckState
 import com.example.viewmodel.UiState
 import com.example.viewmodel.VoltLedgerViewModel
 import com.google.firebase.Firebase
@@ -187,6 +197,7 @@ private fun VoltLedgerMainShell(
                 }
                 VoltLedgerViewModel(
                     repository = MeterRepository(app.applicationContext),
+                    updateChecker = AppUpdateChecker(app.applicationContext),
                     currentUserId = userId,
                     userDisplayName = userDisplayName,
                     userEmail = userEmail
@@ -202,6 +213,9 @@ private fun VoltLedgerMainShell(
     val selectedCustomerFilterId by viewModel.selectedCustomerFilterId.collectAsStateWithLifecycle()
     val selectedDateRange by viewModel.selectedDateRange.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val autoUpdateCheckEnabled by viewModel.autoUpdateCheckEnabled.collectAsStateWithLifecycle()
+    val dismissedUpdateTag by viewModel.dismissedUpdateTag.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) {
@@ -212,6 +226,7 @@ private fun VoltLedgerMainShell(
 
     var currentTab by remember { mutableStateOf(AppTab.DASHBOARD) }
     var showAccountDialog by remember { mutableStateOf(false) }
+    var activeUpdateDialogInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
 
     // Modal workflow states
     var showCustomerForm by remember { mutableStateOf(false) }
@@ -395,55 +410,70 @@ private fun VoltLedgerMainShell(
                     }
                 }
             ) { innerPadding ->
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (currentTab) {
-                        AppTab.DASHBOARD -> DashboardScreen(
-                            analytics = analytics,
-                            customersState = customersState,
-                            selectedCustomerId = selectedCustomerFilterId,
-                            selectedDateRange = selectedDateRange,
-                            syncState = syncState,
-                            onSelectCustomer = { viewModel.selectCustomerFilter(it) },
-                            onSelectDateRange = { viewModel.selectDateRange(it) },
-                            onLogReadingClick = { openLogReading() },
-                            onAddCustomerClick = { openAddCustomer() },
-                            onOpenReportsClick = { currentTab = AppTab.REPORTS },
-                            onSyncNowClick = { viewModel.syncNow() },
-                            onInspectCustomer = { cid -> inspectingCustomerId = cid }
+                    val availableUpdate = (updateState as? UpdateCheckState.UpdateAvailable)?.info
+                    if (availableUpdate != null && availableUpdate.tagName != dismissedUpdateTag) {
+                        UpdateAvailableBanner(
+                            info = availableUpdate,
+                            onInspect = { activeUpdateDialogInfo = availableUpdate },
+                            onDismiss = { viewModel.dismissUpdateBanner(availableUpdate.tagName) }
                         )
-                        AppTab.CUSTOMERS -> CustomersScreen(
-                            customerMetrics = analytics.customerSummaries,
-                            onAddCustomerClick = { openAddCustomer() },
-                            onEditCustomer = { c ->
-                                editingCustomer = c
-                                showCustomerForm = true
-                            },
-                            onDeleteCustomer = { c -> customerPendingDelete = c },
-                            onLogReadingForCustomer = { c -> openLogReading(c.id) },
-                            onSelectCustomerDetail = { c -> inspectingCustomerId = c.id }
-                        )
-                        AppTab.READINGS -> ReadingsScreen(
-                            readings = readingRecords,
-                            customers = customers,
-                            onLogReadingClick = { openLogReading() },
-                            onEditReading = { r ->
-                                editingReading = r
-                                showReadingForm = true
-                            },
-                            onDeleteReading = { r -> readingPendingDelete = r }
-                        )
-                        AppTab.REPORTS -> ReportsScreen(
-                            customers = customers,
-                            allReadings = readingRecords,
-                            syncState = syncState,
-                            userDisplayName = userDisplayName,
-                            onSyncNowClick = { viewModel.syncNow() },
-                            onShowMessage = { viewModel.showMessage(it) }
-                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        when (currentTab) {
+                            AppTab.DASHBOARD -> DashboardScreen(
+                                analytics = analytics,
+                                customersState = customersState,
+                                selectedCustomerId = selectedCustomerFilterId,
+                                selectedDateRange = selectedDateRange,
+                                syncState = syncState,
+                                onSelectCustomer = { viewModel.selectCustomerFilter(it) },
+                                onSelectDateRange = { viewModel.selectDateRange(it) },
+                                onLogReadingClick = { openLogReading() },
+                                onAddCustomerClick = { openAddCustomer() },
+                                onOpenReportsClick = { currentTab = AppTab.REPORTS },
+                                onSyncNowClick = { viewModel.syncNow() },
+                                onInspectCustomer = { cid -> inspectingCustomerId = cid }
+                            )
+                            AppTab.CUSTOMERS -> CustomersScreen(
+                                customerMetrics = analytics.customerSummaries,
+                                onAddCustomerClick = { openAddCustomer() },
+                                onEditCustomer = { c ->
+                                    editingCustomer = c
+                                    showCustomerForm = true
+                                },
+                                onDeleteCustomer = { c -> customerPendingDelete = c },
+                                onLogReadingForCustomer = { c -> openLogReading(c.id) },
+                                onSelectCustomerDetail = { c -> inspectingCustomerId = c.id }
+                            )
+                            AppTab.READINGS -> ReadingsScreen(
+                                readings = readingRecords,
+                                customers = customers,
+                                onLogReadingClick = { openLogReading() },
+                                onEditReading = { r ->
+                                    editingReading = r
+                                    showReadingForm = true
+                                },
+                                onDeleteReading = { r -> readingPendingDelete = r }
+                            )
+                            AppTab.REPORTS -> ReportsScreen(
+                                customers = customers,
+                                allReadings = readingRecords,
+                                syncState = syncState,
+                                userDisplayName = userDisplayName,
+                                onSyncNowClick = { viewModel.syncNow() },
+                                onShowMessage = { viewModel.showMessage(it) }
+                            )
+                        }
                     }
                 }
             }
@@ -561,9 +591,9 @@ private fun VoltLedgerMainShell(
     if (showAccountDialog) {
         AlertDialog(
             onDismissRequest = { showAccountDialog = false },
-            title = { Text("Account & Cloud Backup") },
+            title = { Text("Account, Backup & Updates") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = userDisplayName,
                         style = MaterialTheme.typography.titleMedium
@@ -606,6 +636,108 @@ private fun VoltLedgerMainShell(
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.sync_now))
                     }
+
+                    HorizontalDivider()
+
+                    // App Updates Section
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("App Updates", style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        text = "Installed: ${viewModel.appVersionLabel}",
+                                        style = MonoMetricSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.SystemUpdate,
+                                    contentDescription = "App updates",
+                                    tint = ElectricCyan
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Auto-check on launch",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Switch(
+                                    checked = autoUpdateCheckEnabled,
+                                    onCheckedChange = { viewModel.setAutoUpdateCheckEnabled(it) },
+                                    modifier = Modifier.testTag("auto_update_switch")
+                                )
+                            }
+
+                            when (val st = updateState) {
+                                is UpdateCheckState.UpdateAvailable -> {
+                                    Button(
+                                        onClick = {
+                                            showAccountDialog = false
+                                            activeUpdateDialogInfo = st.info
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("account_view_update_btn")
+                                    ) {
+                                        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Update Available (${st.info.tagName})")
+                                    }
+                                }
+                                is UpdateCheckState.UpToDate -> {
+                                    Text(
+                                        text = "Up to date (latest: ${st.latestTag ?: viewModel.appVersionLabel})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrightEmerald
+                                    )
+                                }
+                                is UpdateCheckState.Error -> {
+                                    Text(
+                                        text = st.message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AlertCoral
+                                    )
+                                }
+                                else -> Unit
+                            }
+
+                            OutlinedButton(
+                                onClick = { viewModel.checkForUpdates(manual = true) },
+                                enabled = updateState !is UpdateCheckState.Checking,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("check_updates_btn")
+                            ) {
+                                if (updateState is UpdateCheckState.Checking) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Checking GitHub Releases...")
+                                } else {
+                                    Icon(Icons.Rounded.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Check for Updates")
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -628,5 +760,147 @@ private fun VoltLedgerMainShell(
                 }
             }
         )
+    }
+
+    activeUpdateDialogInfo?.let { info ->
+        AlertDialog(
+            onDismissRequest = { activeUpdateDialogInfo = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.SystemUpdate,
+                    contentDescription = "New update available",
+                    tint = ElectricCyan
+                )
+            },
+            title = { Text("Update Available") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = info.releaseTitle,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "Release: ${info.tagName}  •  ${AppUpdateChecker.formatFileSize(info.assetSizeBytes)}",
+                                style = MonoMetricSmall,
+                                color = ElectricCyan
+                            )
+                            Text(
+                                text = "Installed: ${viewModel.appVersionLabel}",
+                                style = MonoMetricSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (info.releaseNotes.isNotBlank()) {
+                        Text(
+                            text = info.releaseNotes.take(360),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "Opens the latest GitHub Release download in your browser.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val opened = AppUpdateChecker.openExternalUrl(context, info.downloadUrl)
+                        if (!opened) {
+                            viewModel.showMessage("No browser found to open update link")
+                        }
+                        activeUpdateDialogInfo = null
+                    },
+                    modifier = Modifier.testTag("download_update_btn")
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Download APK")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            AppUpdateChecker.openExternalUrl(context, info.releasePageUrl)
+                        }
+                    ) {
+                        Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Release Page")
+                    }
+                    TextButton(onClick = { activeUpdateDialogInfo = null }) {
+                        Text("Later")
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun UpdateAvailableBanner(
+    info: AppUpdateInfo,
+    onInspect: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Surface(
+        color = ElectricCyan.copy(alpha = 0.14f),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable(onClick = onInspect)
+            .testTag("update_available_banner")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.SystemUpdate,
+                contentDescription = "Update available",
+                tint = ElectricCyan,
+                modifier = Modifier.size(22.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "New Version Available",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${info.tagName} • Tap to download from GitHub Releases",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onInspect) {
+                Text("Update")
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Dismiss update banner",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }

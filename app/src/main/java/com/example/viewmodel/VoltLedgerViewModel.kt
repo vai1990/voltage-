@@ -15,6 +15,8 @@ import com.example.data.SyncSnapshot
 import com.example.data.SyncedRecord
 import com.example.data.TariffPlan
 import com.example.data.WriteOutcome
+import com.example.update.AppUpdateChecker
+import com.example.update.UpdateCheckState
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,6 +47,7 @@ data class SyncBannerState(
 
 class VoltLedgerViewModel(
     private val repository: MeterRepository,
+    private val updateChecker: AppUpdateChecker,
     private val currentUserId: String,
     private val userDisplayName: String,
     private val userEmail: String?
@@ -59,6 +62,17 @@ class VoltLedgerViewModel(
     private val _isSyncingNow = MutableStateFlow(false)
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _updateState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
+    val updateState: StateFlow<UpdateCheckState> = _updateState.asStateFlow()
+
+    private val _autoUpdateCheckEnabled = MutableStateFlow(updateChecker.isAutoCheckEnabled())
+    val autoUpdateCheckEnabled: StateFlow<Boolean> = _autoUpdateCheckEnabled.asStateFlow()
+
+    private val _dismissedUpdateTag = MutableStateFlow(updateChecker.getDismissedTag())
+    val dismissedUpdateTag: StateFlow<String?> = _dismissedUpdateTag.asStateFlow()
+
+    val appVersionLabel: String = "v${updateChecker.currentVersionName} (${updateChecker.currentVersionCode})"
 
     private val _snackbarEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val snackbarEvents: SharedFlow<String> = _snackbarEvents.asSharedFlow()
@@ -144,6 +158,64 @@ class VoltLedgerViewModel(
         viewModelScope.launch {
             repository.ensureUserProfile(userDisplayName, userEmail)
         }
+        if (updateChecker.isAutoCheckEnabled()) {
+            checkForUpdates(manual = false)
+        }
+    }
+
+    fun checkForUpdates(manual: Boolean = true) {
+        if (_updateState.value is UpdateCheckState.Checking) return
+        viewModelScope.launch {
+            if (!isOnline.value) {
+                if (manual) {
+                    _snackbarEvents.tryEmit("Offline — connect to the internet to check for app updates")
+                }
+                return@launch
+            }
+            if (manual) {
+                updateChecker.clearDismissedTag()
+                _dismissedUpdateTag.value = null
+            }
+            _updateState.value = UpdateCheckState.Checking
+            val result = updateChecker.checkLatestRelease()
+            result.fold(
+                onSuccess = { info ->
+                    if (info.updateAvailable) {
+                        _updateState.value = UpdateCheckState.UpdateAvailable(info)
+                    } else {
+                        _updateState.value = UpdateCheckState.UpToDate(
+                            currentVersion = updateChecker.currentVersionName,
+                            latestTag = info.tagName
+                        )
+                        if (manual) {
+                            _snackbarEvents.tryEmit("VoltLedger $appVersionLabel is up to date")
+                        }
+                    }
+                },
+                onFailure = { err ->
+                    val message = err.localizedMessage ?: "Unable to check for updates"
+                    if (manual) {
+                        _updateState.value = UpdateCheckState.Error(message)
+                        _snackbarEvents.tryEmit(message)
+                    } else {
+                        _updateState.value = UpdateCheckState.Idle
+                    }
+                }
+            )
+        }
+    }
+
+    fun setAutoUpdateCheckEnabled(enabled: Boolean) {
+        updateChecker.setAutoCheckEnabled(enabled)
+        _autoUpdateCheckEnabled.value = enabled
+        if (enabled && _updateState.value is UpdateCheckState.Idle) {
+            checkForUpdates(manual = false)
+        }
+    }
+
+    fun dismissUpdateBanner(tagName: String) {
+        updateChecker.dismissTag(tagName)
+        _dismissedUpdateTag.value = tagName
     }
 
     fun selectCustomerFilter(customerId: String?) {
